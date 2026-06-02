@@ -2,8 +2,15 @@
   * @file    rk_task.h
   * @brief   rktask 实时操作系统 - 主头文件
   * @author  Reverseking
-  * @note    包含所有类型定义、配置宏和 API 声明
-  *          支持 Cortex-M0+/M3/M4/M7 (编译期自动检测)
+  * @note    支持 Cortex-M0+/M3/M4/M7
+  *
+  * 用法:
+  *   M3/M4/M7:  #include "stm32f1xx_hal.h"  // 你的 MCU HAL 头文件
+  *              #include "rk_task.h"
+  *
+  *   M0+:       #define RK_PORT_M0PLUS
+  *              #include "stm32g0xx_hal.h"
+  *              #include "rk_task.h"
   */
 #ifndef __RK_TASK_H__
 #define __RK_TASK_H__
@@ -12,66 +19,22 @@
 #include <stddef.h>
 #include <string.h>
 
-/* ======================== 架构检测 (M0+ / M3 / M4 / M7) ============ */
+#ifdef __cplusplus
+extern "C" {
+#endif
 
-/* 层级 1: 用户手动指定 (用于自动检测失效的环境) */
-#if defined(RK_PORT_M3)
-    #define RK_ARCH_M3          1
-#elif defined(RK_PORT_M0PLUS)
+/* ======================== 架构选择 ========================== */
+
+/* 用户定义 RK_PORT_M0PLUS → M0+ (PRIMASK), 否则 M3/M4/M7 (BASEPRI) */
+#if defined(RK_PORT_M0PLUS)
     #define RK_ARCH_M0PLUS      1
-#endif
-
-/* 层级 2: CMSIS 已包含 (STM32 HAL 等已在 rk_task.h 之前被包含) */
-#if !defined(RK_ARCH_M3) && !defined(RK_ARCH_M0PLUS)
-    #if defined(__CORE_CM3_H_GENERIC) || defined(__CORE_CM4_H_GENERIC) || \
-        defined(__CORE_CM7_H_GENERIC) || defined(CORE_CM3_H) || defined(CORE_CM4_H)
-        #define RK_ARCH_M3      1
-    #elif defined(__CORE_CM0PLUS_H_GENERIC) || defined(CORE_CM0PLUS_H)
-        #define RK_ARCH_M0PLUS  1
-    #endif
-#endif
-
-/* 层级 3: 编译器内置宏自动检测 */
-#if !defined(RK_ARCH_M3) && !defined(RK_ARCH_M0PLUS)
-    #if defined(__ARM_ARCH_6M__) || (defined(__CORTEX_M) && __CORTEX_M == 0)
-        #define RK_ARCH_M0PLUS      1
-    #elif defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__) || \
-          (defined(__CORTEX_M) && __CORTEX_M >= 3)
-        #define RK_ARCH_M3          1
-    #endif
-#endif
-
-/* 层级 4: 已知 ARM 工具链兜底 (IAR/ARMCC/GCC 未提供架构宏时默认 M3) */
-#if !defined(RK_ARCH_M3) && !defined(RK_ARCH_M0PLUS)
-    #if defined(__ICCARM__) || defined(__ARMCC_VERSION) || defined(__GNUC__)
-        /* Known ARM toolchain without arch macro -> default to M3 */
-        #define RK_ARCH_M3          1
-    #else
-        #error "rktask: architecture detection failed. Define RK_PORT_M3=1 or RK_PORT_M0PLUS=1 before including this header"
-    #endif
-#endif
-
-/* 验证 CMSIS-Core 是否已包含 (rk_lock/rk_unlock 依赖 CMSIS 内联函数) */
-#if defined(RK_ARCH_M3) && \
-    !defined(__CORE_CM3_H_GENERIC) && !defined(__CORE_CM4_H_GENERIC) && \
-    !defined(__CORE_CM7_H_GENERIC)
-    #error "rktask: CMSIS-Core (core_cm3.h) not found. Include your MCU HAL header before #include \"rk_task.h\" (e.g. #include \"stm32f1xx_hal.h\")"
-#elif defined(RK_ARCH_M0PLUS) && !defined(__CORE_CM0PLUS_H_GENERIC)
-    #error "rktask: CMSIS-Core (core_cm0plus.h) not found. Include your MCU HAL header before #include \"rk_task.h\""
-#endif
-
-/* 定义临界区宏 (依赖 CMSIS __set_BASEPRI / __disable_irq) */
-#if defined(RK_ARCH_M0PLUS)
-    #define rk_lock()       __disable_irq()
-    #define rk_unlock()     __enable_irq()
-#elif defined(RK_ARCH_M3)
+    #define rk_lock()           __disable_irq()
+    #define rk_unlock()         __enable_irq()
+#else
+    #define RK_ARCH_M3          1
     #define RK_BASEPRI_VAL      0xF0
     #define rk_lock()           __set_BASEPRI(RK_BASEPRI_VAL)
     #define rk_unlock()         __set_BASEPRI(0)
-#endif
-
-#ifdef __cplusplus
-extern "C" {
 #endif
 
 /* ======================== 配置宏 ======================== */
@@ -175,12 +138,6 @@ uint8_t  rk_task_stk_check(rk_id_t id);
 #define RK_ASSERT(expr) ((void)0)
 #endif
 
-/* ----- 临界区保护 ----- */
-/**
-  * M0+: PRIMASK (__disable_irq / __enable_irq)
-  * M3+: BASEPRI (__set_BASEPRI) — 保留高优先级 ISR 响应
-  *       注意: 优先级高于 BASEPRI 的 ISR 不得调用内核链表 API
-  */
 #ifdef __cplusplus
 }
 #endif

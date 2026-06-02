@@ -22,8 +22,19 @@
     .global rk_sched
     .type   PendSV_Handler, %function
 
-#if defined(__ARM_ARCH_6M__) || (defined(__CORTEX_M) && __CORTEX_M == 0)
-    /* ============ Cortex-M0+ (ARMv6-M) ============ */
+/* ===== Architecture =====
+   M0+:  define RK_PORT_M0PLUS in assembler flags (-DRK_PORT_M0PLUS)
+         Uses stmia (no stmdb), 13 instructions
+   M3+:  default path
+         Uses stmdb/ldmia, 9 instructions
+
+   Assembler invocation:
+     M0+:  arm-none-eabi-gcc -c src/rk_task.S -o rk_task.o -DRK_PORT_M0PLUS
+     M3+:  arm-none-eabi-gcc -c src/rk_task.S -o rk_task.o
+     ============================ */
+
+#if defined(RK_PORT_M0PLUS)
+    /* ============ Cortex-M0+ ============ */
     .cpu    cortex-m0plus
 
 PendSV_Handler:
