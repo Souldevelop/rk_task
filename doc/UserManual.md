@@ -1044,8 +1044,8 @@ void consume_task(void)
 
 | 常量 | 值 | 说明 |
 |:-----|:--:|:-----|
-| `RK_TYPE_COOP` | 0 | 协作式（不抢占，需 yield） |
-| `RK_TYPE_PREEMPT` | 1 | 抢占式（时间片轮转） |
+| `RK_TYPE_COOP` | 0 | 协作式（需主动 yield） |
+| `RK_TYPE_PREEMPT` | 1 | 分时轮转（时间片到期自动切换） |
 
 ### 事件模式
 

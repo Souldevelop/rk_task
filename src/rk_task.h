@@ -48,8 +48,8 @@ extern "C" {
 #define RK_MS_TO_TICKS(ms)  ((ms) + RK_TICK_MS - 1) / RK_TICK_MS
 
 /* 任务类型 */
-#define RK_TYPE_COOP        0       /* 协作式任务 (非抢占, 需主动让出)   */
-#define RK_TYPE_PREEMPT     1       /* 抢占式任务 (时间片轮转)          */
+#define RK_TYPE_COOP        0       /* 协作式任务 (需主动让出)          */
+#define RK_TYPE_PREEMPT     1       /* 分时轮转任务 (时间片到期自动切换) */
 
 /* 事件等待模式 */
 #define RK_EVENT_AND        0       /* 等待全部位同时满足               */
