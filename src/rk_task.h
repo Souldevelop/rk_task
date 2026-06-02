@@ -14,21 +14,35 @@
 
 /* ======================== 架构检测 (M0+ / M3 / M4 / M7) ============ */
 
-#if defined(__ARM_ARCH_6M__)
-    /* Cortex-M0+ (M0 无 PSP 不支持) */
-    #define RK_ARCH_M0PLUS     1
+/* 方式 1: 用户手动指定 (用于自动检测失效的环境)
+   - 在包含 rk_task.h 之前定义 RK_PORT_M3 或 RK_PORT_M0PLUS */
+#if defined(RK_PORT_M3)
+    #define RK_ARCH_M3          1
+#elif defined(RK_PORT_M0PLUS)
+    #define RK_ARCH_M0PLUS      1
+#else
+    /* 方式 2: 编译器内置宏自动检测
+       GCC/Clang:   __ARM_ARCH_6M__ / __ARM_ARCH_7M__ / __ARM_ARCH_7EM__
+       IAR:         __CORTEX_M == 0 (M0+) / >= 3 (M3+)                  */
+    #if defined(__ARM_ARCH_6M__) || (defined(__CORTEX_M) && __CORTEX_M == 0)
+        #define RK_ARCH_M0PLUS      1
+    #elif defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__) || \
+          (defined(__CORTEX_M) && __CORTEX_M >= 3)
+        #define RK_ARCH_M3          1
+    #else
+        #error "rktask: 无法自动检测架构。可手动指定: 在 #include \"rk_task.h\" 之前定义 RK_PORT_M3=1 或 RK_PORT_M0PLUS=1"
+    #endif
+#endif
+
+#if defined(RK_ARCH_M0PLUS)
     #include "core_cm0plus.h"
     #define rk_lock()       __disable_irq()
     #define rk_unlock()     __enable_irq()
-#elif defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__)
-    /* Cortex-M3 / M4 / M7 */
-    #define RK_ARCH_M3          1
+#elif defined(RK_ARCH_M3)
     #include "core_cm3.h"
     #define RK_BASEPRI_VAL      0xF0
     #define rk_lock()           __set_BASEPRI(RK_BASEPRI_VAL)
     #define rk_unlock()         __set_BASEPRI(0)
-#else
-    #error "rktask: 仅支持 Cortex-M0+/M3/M4/M7"
 #endif
 
 #ifdef __cplusplus

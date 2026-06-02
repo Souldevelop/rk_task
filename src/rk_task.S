@@ -22,7 +22,7 @@
     .global rk_sched
     .type   PendSV_Handler, %function
 
-#if defined(__ARM_ARCH_6M__)
+#if defined(__ARM_ARCH_6M__) || (defined(__CORTEX_M) && __CORTEX_M == 0)
     /* ============ Cortex-M0+ (ARMv6-M) ============ */
     .cpu    cortex-m0plus
 

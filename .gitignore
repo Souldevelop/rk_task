@@ -27,9 +27,17 @@ Release/
 *.swp
 *.swo
 
+# IDE 构建中间产物
+BrowseInfo/
+settings/
+*.dnx
+.ninja_log
+compile_commands.json
+.mxproject
+
 # 系统
 .DS_Store
 Thumbs.db
 
-# 示例文件 (开发者在自己的项目中按需使用)
-main.c
+# 示例目录 (开发者在自己的项目中按需使用)
+example/
