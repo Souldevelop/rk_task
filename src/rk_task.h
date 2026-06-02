@@ -14,26 +14,44 @@
 
 /* ======================== 架构检测 (M0+ / M3 / M4 / M7) ============ */
 
-/* 方式 1: 用户手动指定 (用于自动检测失效的环境)
-   - 在包含 rk_task.h 之前定义 RK_PORT_M3 或 RK_PORT_M0PLUS */
+/* 层级 1: 用户手动指定 (用于自动检测失效的环境) */
 #if defined(RK_PORT_M3)
     #define RK_ARCH_M3          1
 #elif defined(RK_PORT_M0PLUS)
     #define RK_ARCH_M0PLUS      1
-#else
-    /* 方式 2: 编译器内置宏自动检测
-       GCC/Clang:   __ARM_ARCH_6M__ / __ARM_ARCH_7M__ / __ARM_ARCH_7EM__
-       IAR:         __CORTEX_M == 0 (M0+) / >= 3 (M3+)                  */
+#endif
+
+/* 层级 2: CMSIS 已包含 (STM32 HAL 等已在 rk_task.h 之前被包含) */
+#if !defined(RK_ARCH_M3) && !defined(RK_ARCH_M0PLUS)
+    #if defined(__CORE_CM3_H_GENERIC) || defined(__CORE_CM4_H_GENERIC) || \
+        defined(__CORE_CM7_H_GENERIC) || defined(CORE_CM3_H) || defined(CORE_CM4_H)
+        #define RK_ARCH_M3      1
+    #elif defined(__CORE_CM0PLUS_H_GENERIC) || defined(CORE_CM0PLUS_H)
+        #define RK_ARCH_M0PLUS  1
+    #endif
+#endif
+
+/* 层级 3: 编译器内置宏自动检测 */
+#if !defined(RK_ARCH_M3) && !defined(RK_ARCH_M0PLUS)
     #if defined(__ARM_ARCH_6M__) || (defined(__CORTEX_M) && __CORTEX_M == 0)
         #define RK_ARCH_M0PLUS      1
     #elif defined(__ARM_ARCH_7M__) || defined(__ARM_ARCH_7EM__) || \
           (defined(__CORTEX_M) && __CORTEX_M >= 3)
         #define RK_ARCH_M3          1
-    #else
-        #error "rktask: architecture auto-detection failed. Define RK_PORT_M3=1 or RK_PORT_M0PLUS=1 before #include \"rk_task.h\""
     #endif
 #endif
 
+/* 层级 4: 已知 ARM 工具链兜底 (IAR/ARMCC/GCC 未提供架构宏时默认 M3) */
+#if !defined(RK_ARCH_M3) && !defined(RK_ARCH_M0PLUS)
+    #if defined(__ICCARM__) || defined(__ARMCC_VERSION) || defined(__GNUC__)
+        /* Known ARM toolchain without arch macro -> default to M3 */
+        #define RK_ARCH_M3          1
+    #else
+        #error "rktask: architecture detection failed. Define RK_PORT_M3=1 or RK_PORT_M0PLUS=1 before including this header"
+    #endif
+#endif
+
+/* 包含 CMSIS 头文件并定义临界区宏 */
 #if defined(RK_ARCH_M0PLUS)
     #include "core_cm0plus.h"
     #define rk_lock()       __disable_irq()
