@@ -38,6 +38,40 @@
 
 extern uint32_t SystemCoreClock;        /* 由 HAL/启动文件提供          */
 
+/* ======================== 内核全局状态 ===================== */
+
+/* 任务池 */
+static rk_task_t  task_pool[RK_TASK_MAX];
+static uint8_t    task_used = 0;
+
+/* 就绪链表: 按类型索引 [RK_TYPE_COOP, RK_TYPE_PREEMPT]
+   rk_lock() 提供编译器屏障 (M0+: __disable_irq M3+: __set_BASEPRI);
+   链表头指针无需 volatile. */
+static rk_task_t *ready_head[2] = {NULL, NULL};
+static rk_task_t *ready_tail[2] = {NULL, NULL};
+
+/* 延时链表 (delta-encoded: 每个节点存储相对前驱的 tick 差值) */
+static rk_task_t *delay_head   = NULL;
+static rk_task_t *delay_tail   = NULL;
+
+/* 当前运行任务 (全局, 被 PendSV 内联汇编引用; volatile 防止编译器缓存跨 asm 的写入) */
+rk_task_t *volatile rk_cur = NULL;
+
+/* 空闲任务 (独立 TCB, 不占用任务池) */
+static rk_task_t  rk_idle_tcb;
+static uint32_t   rk_idle_stk[RK_IDLE_STK_SZ];
+
+/* 系统滴答 */
+volatile uint32_t rk_tick = 0;
+
+/* 事件组池 */
+static struct {
+    uint32_t    flags;                  /* 当前事件状态位             */
+    rk_task_t  *wait_head;              /* 等待此事件的任务链表       */
+    rk_task_t  *wait_tail;
+    uint8_t     used;                   /* 是否已被使用               */
+} evt_pool[RK_EVT_MAX];
+
 /* ======================== 链表操作 ======================== */
 
 /** 将节点加入链表尾部 */
@@ -237,40 +271,6 @@ static uint32_t *rk_stk_init(uint32_t *base, uint32_t sz,
     return sp;
 }
 
-/* ======================== 内核全局状态 ===================== */
-
-/* 任务池 */
-static rk_task_t  task_pool[RK_TASK_MAX];
-static uint8_t    task_used = 0;
-
-/* 就绪链表: 按类型索引 [RK_TYPE_COOP, RK_TYPE_PREEMPT]
-   rk_lock() 提供编译器屏障 (M0+: __disable_irq M3+: __set_BASEPRI);
-   链表头指针无需 volatile. */
-static rk_task_t *ready_head[2] = {NULL, NULL};
-static rk_task_t *ready_tail[2] = {NULL, NULL};
-
-/* 延时链表 (delta-encoded: 每个节点存储相对前驱的 tick 差值) */
-static rk_task_t *delay_head   = NULL;
-static rk_task_t *delay_tail   = NULL;
-
-/* 当前运行任务 (全局, 被 rk_port.s 引用; volatile 防止编译器缓存跨 asm 的写入) */
-rk_task_t *volatile rk_cur = NULL;
-
-/* 空闲任务 (独立 TCB, 不占用任务池) */
-static rk_task_t  rk_idle_tcb;
-static uint32_t   rk_idle_stk[RK_IDLE_STK_SZ];
-
-/* 系统滴答 */
-volatile uint32_t rk_tick = 0;
-
-/* 事件组池 */
-static struct {
-    uint32_t    flags;                  /* 当前事件状态位             */
-    rk_task_t  *wait_head;              /* 等待此事件的任务链表       */
-    rk_task_t  *wait_tail;
-    uint8_t     used;                   /* 是否已被使用               */
-} evt_pool[RK_EVT_MAX];
-
 /* ======================== 空闲任务 ======================== */
 
 static void rk_idle_entry(void)
@@ -342,7 +342,7 @@ rk_id_t rk_task_create(const char *name, void (*fn)(void),
     rk_task_t *t = &task_pool[id];
 
     /* 初始化 TCB */
-    t->sp           = rk_stk_init(stk, sz, fn, 0);
+    t->sp           = rk_stk_init(stk, sz, (void *)fn, 0);
     t->stack_base   = stk;
     t->stack_size   = sz;
     t->type         = type;
@@ -1003,7 +1003,7 @@ void rk_task_init(void)
     /* 创建空闲任务 (独立 TCB, 不在任务池中) */
     memset(&rk_idle_tcb, 0, sizeof(rk_idle_tcb));
     rk_idle_tcb.sp         = rk_stk_init(rk_idle_stk, RK_IDLE_STK_SZ,
-                                         rk_idle_entry, 0);
+                                         (void *)rk_idle_entry, 0);
     rk_idle_tcb.stack_base = rk_idle_stk;
     rk_idle_tcb.stack_size = RK_IDLE_STK_SZ;
     rk_idle_tcb.type       = RK_TYPE_COOP;
@@ -1041,42 +1041,42 @@ void rk_task_start(void)
 /* ======================== PendSV 上下文切换 =================== */
 
 #if defined(__ICCARM__)
-/* IAR 内联汇编版本 (不依赖外部 .S 文件) */
-__asm void PendSV_Handler(void)
+/* IAR V9 内联汇编: __stackless 防止编译器生成 prologue/epilogue */
+__stackless void PendSV_Handler(void)
 {
     /* r0 = PSP, 保存 R4-R11 */
-    mrs r0, psp
+    __asm("mrs r0, psp");
 
 #if defined(RK_PORT_M0PLUS)
     /* M0+: 无 stmdb, 分两段 stmia */
-    subs r0, r0, #32
-    stmia r0!, {r4-r7}
-    stmia r0!, {r8-r11}
-    subs r0, r0, #32
+    __asm("subs r0, r0, #32");
+    __asm("stmia r0!, {r4-r7}");
+    __asm("stmia r0!, {r8-r11}");
+    __asm("subs r0, r0, #32");
 #else
     /* M3+: stmdb 一条指令 */
-    stmdb r0!, {r4-r11}
+    __asm("stmdb r0!, {r4-r11}");
 #endif
 
     /* TCB->sp = 当前 PSP */
-    ldr r1, =rk_cur
-    ldr r2, [r1]
-    str r0, [r2]
+    __asm("ldr r1, =rk_cur");
+    __asm("ldr r2, [r1]");
+    __asm("str r0, [r2]");
 
     /* rk_sched() 返回新任务 sp 在 r0 */
-    bl rk_sched
+    __asm("bl rk_sched");
 
 #if defined(RK_PORT_M0PLUS)
     /* M0+: 分两段恢复 */
-    ldmia r0!, {r4-r7}
-    ldmia r0!, {r8-r11}
+    __asm("ldmia r0!, {r4-r7}");
+    __asm("ldmia r0!, {r8-r11}");
 #else
     /* M3+: ldmia 一条指令 */
-    ldmia r0!, {r4-r11}
+    __asm("ldmia r0!, {r4-r11}");
 #endif
 
-    msr psp, r0
-    bx lr
+    __asm("msr psp, r0");
+    __asm("bx lr");
 }
 
 #else
