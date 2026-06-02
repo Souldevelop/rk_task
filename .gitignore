@@ -1,0 +1,35 @@
+# 编译产物
+*.o
+*.elf
+*.hex
+*.bin
+*.list
+*.map
+*.out
+*.obj
+
+# 构建目录
+build/
+Debug/
+Release/
+
+# IDE 文件
+*.uvguix.*
+*.uvoptx
+*.uvprojx
+*.ewp
+*.eww
+*.idea/
+*.vscode/
+
+# 编辑器临时文件
+*~
+*.swp
+*.swo
+
+# 系统
+.DS_Store
+Thumbs.db
+
+# 示例文件 (开发者在自己的项目中按需使用)
+main.c
