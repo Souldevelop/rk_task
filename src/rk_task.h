@@ -31,6 +31,7 @@ extern "C" {
     #define rk_lock()           __disable_irq()
     #define rk_unlock()         __enable_irq()
 #else
+
     #define RK_ARCH_M3          1
     #define RK_BASEPRI_VAL      0xF0
     #define rk_lock()           __set_BASEPRI(RK_BASEPRI_VAL)

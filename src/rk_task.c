@@ -5,12 +5,7 @@
   * @note    调度器 | 任务管理 | 事件标志 | SysTick | Delta 延时队列 O(1)/tick
   */
 #include "rk_task.h"
-
-/* CMSIS-Core 头文件由用户的 HAL/标准库在 rk_task.h 之前包含。
-   如果编译报错 "SCB_Type" 或 "__set_BASEPRI" 未定义,
-   请在 #include "rk_task.h" 之前添加你的 MCU 头文件, 例如:
-     #include "stm32f1xx_hal.h"
-   ____________________________________________________________ */
+#include "stm32f1xx_hal.h"
 
 /* ======================== 内核常量 ======================== */
 
@@ -707,7 +702,7 @@ void rk_task_evt_post(rk_id_t id, uint32_t bits)
     {
         uint32_t ipsr = __get_IPSR();
         if (ipsr != 0
-            && (NVIC_GetPriority((ipsr & 0x1FF) - 16) < RK_BASEPRI_VAL))
+            && (NVIC_GetPriority((IRQn_Type)((ipsr & 0x1FF) - 16)) < RK_BASEPRI_VAL))
         {
             return;
         }
@@ -1024,18 +1019,19 @@ void rk_task_start(void)
     /* 配置 SysTick 1ms 中断 */
     SysTick_Config(SystemCoreClock / (1000 / RK_TICK_MS));
 
-    /* 在首次 PendSV 之前选择第一个任务并初始化 PSP, 避免
-       PendSV_Handler 因 rk_cur == NULL 或 PSP == 0 而崩溃
-       (OPT-3: rk_sched 直接返回新任务的 sp, 避免重复解引用) */
+    /* 选择第一个任务并设置其 PSP */
     __set_PSP((uint32_t)rk_sched());
+
+    /* 设置 CONTROL=2: 线程模式使用 PSP (否则硬件异常入栈会写到 MSP) */
+    __set_CONTROL(0x02);
+    __ISB();
 
     /* 触发 PendSV, 启动第一个任务 */
     SCB->ICSR |= SCB_ICSR_PENDSVSET;
 
     /* 调度器启动后永远不会回到这里 */
-    while (1)
-    {
-    }
+    /* PendSV 在 ICSR|=PENDSVSET 后的下一条指令响应，永远到不了这里 */
+    for (;;);
 }
 
 /* ======================== PendSV 上下文切换 =================== */
@@ -1063,8 +1059,10 @@ __stackless void PendSV_Handler(void)
     __asm("ldr r2, [r1]");
     __asm("str r0, [r2]");
 
-    /* rk_sched() 返回新任务 sp 在 r0 */
+    /* rk_sched() 返回新任务 sp 在 r0 (保护 LR 中的 EXC_RETURN) */
+    __asm("push {lr}");
     __asm("bl rk_sched");
+    __asm("pop {lr}");
 
 #if defined(RK_PORT_M0PLUS)
     /* M0+: 分两段恢复 */
@@ -1100,8 +1098,10 @@ __attribute__((naked)) void PendSV_Handler(void)
         "ldr     r1, =rk_cur\n"
         "ldr     r2, [r1]\n"
         "str     r0, [r2]\n"
-        /* rk_sched() 返回新任务 sp 在 r0 */
+        /* rk_sched() 返回新任务 sp 在 r0 (保护 LR 中的 EXC_RETURN) */
+        "push    {lr}\n"
         "bl      rk_sched\n"
+        "pop     {lr}\n"
 #if defined(RK_PORT_M0PLUS)
         /* M0+: 分两段恢复 */
         "ldmia   r0!, {r4-r7}\n"
