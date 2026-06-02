@@ -5,7 +5,12 @@
   * @note    调度器 | 任务管理 | 事件标志 | SysTick | Delta 延时队列 O(1)/tick
   */
 #include "rk_task.h"
-/* CMSIS 头文件已由 rk_task.h 按架构自动引用 (core_cm0plus.h / core_cm3.h) */
+
+/* CMSIS-Core 头文件由用户的 HAL/标准库在 rk_task.h 之前包含。
+   如果编译报错 "SCB_Type" 或 "__set_BASEPRI" 未定义,
+   请在 #include "rk_task.h" 之前添加你的 MCU 头文件, 例如:
+     #include "stm32f1xx_hal.h"
+   ____________________________________________________________ */
 
 /* ======================== 内核常量 ======================== */
 

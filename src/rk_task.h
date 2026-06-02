@@ -51,13 +51,20 @@
     #endif
 #endif
 
-/* 包含 CMSIS 头文件并定义临界区宏 */
+/* 验证 CMSIS-Core 是否已包含 (rk_lock/rk_unlock 依赖 CMSIS 内联函数) */
+#if defined(RK_ARCH_M3) && \
+    !defined(__CORE_CM3_H_GENERIC) && !defined(__CORE_CM4_H_GENERIC) && \
+    !defined(__CORE_CM7_H_GENERIC)
+    #error "rktask: CMSIS-Core (core_cm3.h) not found. Include your MCU HAL header before #include \"rk_task.h\" (e.g. #include \"stm32f1xx_hal.h\")"
+#elif defined(RK_ARCH_M0PLUS) && !defined(__CORE_CM0PLUS_H_GENERIC)
+    #error "rktask: CMSIS-Core (core_cm0plus.h) not found. Include your MCU HAL header before #include \"rk_task.h\""
+#endif
+
+/* 定义临界区宏 (依赖 CMSIS __set_BASEPRI / __disable_irq) */
 #if defined(RK_ARCH_M0PLUS)
-    #include "core_cm0plus.h"
     #define rk_lock()       __disable_irq()
     #define rk_unlock()     __enable_irq()
 #elif defined(RK_ARCH_M3)
-    #include "core_cm3.h"
     #define RK_BASEPRI_VAL      0xF0
     #define rk_lock()           __set_BASEPRI(RK_BASEPRI_VAL)
     #define rk_unlock()         __set_BASEPRI(0)
