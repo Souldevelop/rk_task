@@ -114,7 +114,7 @@ rktask 选择 BASEPRI 而非 PRIMASK。BASEPRI 只屏蔽优先级低于某阈值
 
 | 组件 | Flash | RAM | 说明 |
 |:----|:----:|:---:|:----|
-| 内核代码 | ~1.2 KB | — | rk_task.c + rk_task.S |
+| 内核代码 | ~1.2 KB | — | rk_task.c |
 | TCB 池 | — | 512 B | 16×32B，可配置 |
 | 事件组池 | — | 96 B | 8×12B，可配置 |
 | 空闲任务栈 | — | 256 B | 64×uint32_t，可配置 |
@@ -128,8 +128,7 @@ rktask 选择 BASEPRI 而非 PRIMASK。BASEPRI 只屏蔽优先级低于某阈值
 | 文件 | 说明 |
 |:----|:-----|
 | `src/rk_task.h` | 主头文件：配置宏、类型定义、14 个 API 声明、架构自适应 |
-| `src/rk_task.c` | 内核实现：调度器、任务管理、事件标志、SysTick、Delta 队列 |
-| `src/rk_task.S` | PendSV 汇编：Cortex-M0+/M3/M4/M7 自适应双实现 |
+| `src/rk_task.c` | 内核实现：调度器、任务管理、事件标志、SysTick、Delta 队列、PendSV |
 | `example/main.c` | 使用示例 |
 | `doc/UserManual.md` | 完整用户手册：API 参考、内部机制、移植指南 |
 | `doc/HistoricalDesign.md` | 历史设计文档：设计理念、审查发现、优化演进的完整记录 |

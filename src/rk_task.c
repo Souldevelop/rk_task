@@ -1037,3 +1037,81 @@ void rk_task_start(void)
     {
     }
 }
+
+/* ======================== PendSV 上下文切换 =================== */
+
+#if defined(__ICCARM__)
+/* IAR 内联汇编版本 (不依赖外部 .S 文件) */
+__asm void PendSV_Handler(void)
+{
+    /* r0 = PSP, 保存 R4-R11 */
+    mrs r0, psp
+
+#if defined(RK_PORT_M0PLUS)
+    /* M0+: 无 stmdb, 分两段 stmia */
+    subs r0, r0, #32
+    stmia r0!, {r4-r7}
+    stmia r0!, {r8-r11}
+    subs r0, r0, #32
+#else
+    /* M3+: stmdb 一条指令 */
+    stmdb r0!, {r4-r11}
+#endif
+
+    /* TCB->sp = 当前 PSP */
+    ldr r1, =rk_cur
+    ldr r2, [r1]
+    str r0, [r2]
+
+    /* rk_sched() 返回新任务 sp 在 r0 */
+    bl rk_sched
+
+#if defined(RK_PORT_M0PLUS)
+    /* M0+: 分两段恢复 */
+    ldmia r0!, {r4-r7}
+    ldmia r0!, {r8-r11}
+#else
+    /* M3+: ldmia 一条指令 */
+    ldmia r0!, {r4-r11}
+#endif
+
+    msr psp, r0
+    bx lr
+}
+
+#else
+/* GCC inline assembly version */
+__attribute__((naked)) void PendSV_Handler(void)
+{
+    __asm volatile(
+#if defined(RK_PORT_M0PLUS)
+        /* M0+: 无 stmdb, 分两段 stmia */
+        "mrs     r0, psp\n"
+        "subs    r0, r0, #32\n"
+        "stmia   r0!, {r4-r7}\n"
+        "stmia   r0!, {r8-r11}\n"
+        "subs    r0, r0, #32\n"
+#else
+        /* M3+: stmdb 一条指令 */
+        "mrs     r0, psp\n"
+        "stmdb   r0!, {r4-r11}\n"
+#endif
+        /* TCB->sp = 当前 PSP */
+        "ldr     r1, =rk_cur\n"
+        "ldr     r2, [r1]\n"
+        "str     r0, [r2]\n"
+        /* rk_sched() 返回新任务 sp 在 r0 */
+        "bl      rk_sched\n"
+#if defined(RK_PORT_M0PLUS)
+        /* M0+: 分两段恢复 */
+        "ldmia   r0!, {r4-r7}\n"
+        "ldmia   r0!, {r8-r11}\n"
+#else
+        /* M3+: ldmia 一条指令 */
+        "ldmia   r0!, {r4-r11}\n"
+#endif
+        "msr     psp, r0\n"
+        "bx      lr\n"
+    );
+}
+#endif /* __ICCARM__ */
