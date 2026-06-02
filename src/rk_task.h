@@ -30,7 +30,7 @@
           (defined(__CORTEX_M) && __CORTEX_M >= 3)
         #define RK_ARCH_M3          1
     #else
-        #error "rktask: 无法自动检测架构。可手动指定: 在 #include \"rk_task.h\" 之前定义 RK_PORT_M3=1 或 RK_PORT_M0PLUS=1"
+        #error "rktask: architecture auto-detection failed. Define RK_PORT_M3=1 or RK_PORT_M0PLUS=1 before #include \"rk_task.h\""
     #endif
 #endif
 
